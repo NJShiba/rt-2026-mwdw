@@ -113,6 +113,8 @@
           <div><label>% of home to count</label><input type="number" id="homePct" value="0" step="5"></div>
         </div>
         <div class="note">Home equity defaults to 0% counted &mdash; a backup buffer unless you plan to downsize.</div>
+        <button id="resetBtn" class="scen" style="width:100%;margin-top:12px">Reset to defaults</button>
+        <div class="note" style="border:none;padding-top:6px;margin-top:2px">Changes save automatically in this browser (per device &mdash; edits here don't sync to other people's browsers).</div>
       </div>
       <div class="card" style="margin-top:16px">
         <h2>How to use this</h2>
@@ -248,6 +250,35 @@ function markScen(){
     b.classList.toggle("active", +$("ret").value===+b.dataset.r && +$("infl").value===+b.dataset.i));
 }
 ["ret","infl"].forEach(id=>$(id).addEventListener("input",markScen));
+
+/* ---- persistence: auto-save every input to this browser ---- */
+const STORE="rt-tracker-v1";
+function saveState(){
+  const s={};
+  document.querySelectorAll("input[id]").forEach(el=>{
+    s[el.id]= el.type==="checkbox" ? el.checked : el.value;
+  });
+  try{ localStorage.setItem(STORE, JSON.stringify(s)); }catch(e){}
+}
+function loadState(){
+  let s; try{ s=JSON.parse(localStorage.getItem(STORE)); }catch(e){}
+  if(!s) return;
+  Object.entries(s).forEach(([id,v])=>{
+    const el=$(id); if(!el) return;
+    if(el.type==="checkbox") el.checked=v; else el.value=v;
+  });
+  $("spendManual").disabled=$("useBuilder").checked;
+}
+document.querySelectorAll("input[id]").forEach(el=>{
+  el.addEventListener("input",saveState);
+  el.addEventListener("change",saveState);
+});
+$("resetBtn").addEventListener("click",()=>{
+  if(confirm("Reset all inputs to the built-in defaults? Your saved values in this browser will be cleared.")){
+    localStorage.removeItem(STORE); location.reload();
+  }
+});
+loadState();
 markScen();
 
 function params(){
