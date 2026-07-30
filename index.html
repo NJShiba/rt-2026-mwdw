@@ -197,12 +197,12 @@ const fmtM = n => (n<0?"-$":"$") + (Math.abs(n)/1e6).toFixed(2) + "M";
    phase: 'all' | 'pre65' | 'post65'   disc: shrinks at slow-down age */
 const EXPENSES = [
  {cat:"Housing", items:[
-   {id:"e_mort", label:"Mortgage / rent", def:0},
-   {id:"e_ptax", label:"Property taxes", def:18000},
-   {id:"e_hins", label:"Homeowners insurance", def:3500},
+   {id:"e_mort", label:"Mortgage P&amp;I (excl. property tax)", def:22500},
+   {id:"e_ptax", label:"Property taxes", def:22500},
+   {id:"e_hins", label:"Homeowners insurance", def:1350},
    {id:"e_hoa",  label:"HOA / co-op fees", def:0},
-   {id:"e_util", label:"Utilities (electric, gas, water, internet, phone)", def:8400},
-   {id:"e_maint",label:"Maintenance & repairs (~1% of home value)", def:8000},
+   {id:"e_util", label:"Utilities (electric, gas, water, internet, phone)", def:9000},
+   {id:"e_maint",label:"Maintenance & repairs", def:6000},
    {id:"e_hsink",label:"Big-repair sinking fund (roof, HVAC)", def:4000}]},
  {cat:"Healthcare", items:[
    {id:"e_hpre", label:"Health insurance premiums before Medicare (ACA/COBRA, per couple)", def:26000, phase:"pre65"},
@@ -214,12 +214,13 @@ const EXPENSES = [
    {id:"e_dine", label:"Dining out", def:14000, disc:true}]},
  {cat:"Transportation", items:[
    {id:"e_cpay", label:"Car payment / lease", def:0},
-   {id:"e_cins", label:"Auto insurance", def:3200},
+   {id:"e_cins", label:"Auto insurance (2 cars)", def:4200, phase:"pre65"},
+   {id:"e_cins2",label:"Auto insurance (1 car)", def:2100, phase:"post65"},
    {id:"e_fuel", label:"Fuel, tolls, parking, transit", def:3600},
    {id:"e_cmnt", label:"Car maintenance & registration", def:2000},
    {id:"e_csink",label:"Car replacement sinking fund (next car &divide; years)", def:6000}]},
  {cat:"Travel & leisure", items:[
-   {id:"e_trav", label:"Travel & vacations", def:30000, disc:true},
+   {id:"e_trav", label:"Travel & vacations", def:40000, disc:true},
    {id:"e_hob",  label:"Hobbies, entertainment, memberships", def:8000, disc:true},
    {id:"e_subs", label:"Subscriptions & streaming", def:2400, disc:true}]},
  {cat:"Personal & family", items:[
@@ -247,6 +248,7 @@ const EXPENSES = [
                    (it.disc?'<span class="tag disc">disc</span>':'');
       html += `<div class="exp-item"><span>${it.label}${tags}</span><input type="number" id="${it.id}" value="${it.def}" step="500"></div>`;
     });
+    if(c.cat==="Housing") html += `<div class="exp-item"><span><b>Mortgage paid off at your age</b> (P&amp;I drops out then)</span><input type="number" id="e_mortEnd" value="70"></div>`;
     div.innerHTML = html;
     grid.appendChild(div);
   });
@@ -255,6 +257,7 @@ const EXPENSES = [
 const planInputs = ["curAge","retAge","endAge","swr","portfolio","otherSavings","contrib","spendManual","ssMo","ssAge","spAge","spSsMo","spSsAge","otherInc","ret","infl","inhAmt","inhAge","homeEq","homePct","taxRate","taperPct","taperAge"];
 planInputs.forEach(id=>$(id).addEventListener("input",calc));
 EXPENSES.forEach(c=>c.items.forEach(it=>$(it.id).addEventListener("input",calc)));
+$("e_mortEnd").addEventListener("input",calc);
 $("useBuilder").addEventListener("change",()=>{ $("spendManual").disabled = $("useBuilder").checked; calc(); });
 document.querySelectorAll(".scen").forEach(b=>b.addEventListener("click",()=>{
   $("ret").value=b.dataset.r; $("infl").value=b.dataset.i;
@@ -331,6 +334,7 @@ function netSpendAt(p, age){
   EXPENSES.forEach(c=>c.items.forEach(it=>{
     if(it.phase==="pre65" && age>=65) return;
     if(it.phase==="post65" && age<65) return;
+    if(it.id==="e_mort" && age>=(+$("e_mortEnd").value||999)) return;
     let v=+$(it.id).value||0;
     if(it.disc && age>=p.taperAge) v*=(1+p.taperPct);
     total+=v;
