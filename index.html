@@ -16,7 +16,10 @@
   .sub{color:var(--muted);font-size:13px;margin-bottom:20px}
   .wrap{max-width:1240px;margin:0 auto}
   .layout{display:grid;grid-template-columns:340px 1fr;gap:20px}
-  @media(max-width:900px){.layout{grid-template-columns:1fr}}
+  @media(max-width:900px){
+    .layout{grid-template-columns:1fr}
+    .layout>div:first-child{order:2} /* on phones: results first, inputs below */
+  }
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px}
   .card h2{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 12px}
   label{display:block;font-size:12px;color:var(--muted);margin:10px 0 3px}
@@ -147,9 +150,14 @@
       </div>
       <div class="progress-wrap">
         <h2 style="font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0">Progress toward spend-down number</h2>
-        <div class="bar"><div id="barFill" style="width:0%"></div></div>
-        <div class="bar-label"><span id="barLeft"></span><span id="barRight"></span></div>
-        <div id="status"></div>
+        <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-top:8px">
+          <canvas id="gauge" style="width:120px;height:120px;flex:none"></canvas>
+          <div style="flex:1;min-width:220px">
+            <div class="bar"><div id="barFill" style="width:0%"></div></div>
+            <div class="bar-label"><span id="barLeft"></span><span id="barRight"></span></div>
+            <div id="status"></div>
+          </div>
+        </div>
       </div>
       <div class="card">
         <h2>Projected portfolio (today's dollars)</h2>
@@ -422,7 +430,9 @@ function calc(){
   $("wdRate").className="v "+(wd<=4?"good":wd<=5.5?"warn":"bad");
   $("wdDetail").textContent="Covers "+fmt$(netY1)+" of spending + taxes";
 
-  const pct=Math.min(100,proj/need*100);
+  const pctRaw=need>0?proj/need*100:0;
+  drawGauge(pctRaw);
+  const pct=Math.min(100,pctRaw);
   $("barFill").style.width=pct+"%";
   $("barLeft").textContent="Projected: "+fmtM(proj);
   $("barRight").textContent=pct.toFixed(0)+"% of "+fmtM(need);
@@ -441,6 +451,29 @@ function calc(){
   drawChart(p,proj);
 }
 
+/* donut gauge: % of retirement goal at chosen retirement age */
+function drawGauge(pct){
+  const c=$("gauge"),ctx=c.getContext("2d");
+  const dpr=window.devicePixelRatio||1,S=120;
+  c.width=S*dpr; c.height=S*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,S,S);
+  const cx=S/2,cy=S/2,r=47,lw=13;
+  ctx.lineWidth=lw; ctx.lineCap="round";
+  ctx.strokeStyle="#eceff3";
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,2*Math.PI); ctx.stroke();
+  const frac=Math.max(0,Math.min(1,pct/100));
+  const col=pct>=100?"#1d9a5b":pct>=75?"#d97706":"#dc2626";
+  if(frac>0.005){
+    ctx.strokeStyle=col;
+    ctx.beginPath(); ctx.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+2*Math.PI*frac); ctx.stroke();
+  }
+  ctx.fillStyle=col; ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.font="700 24px -apple-system,BlinkMacSystemFont,sans-serif";
+  ctx.fillText(Math.round(pct)+"%",cx,cy-7);
+  ctx.fillStyle="#68707f"; ctx.font="11px sans-serif";
+  ctx.fillText("of goal",cx,cy+13);
+}
 function drawChart(p){
   const c=$("chart"),ctx=c.getContext("2d");
   /* responsive + retina-sharp sizing */
