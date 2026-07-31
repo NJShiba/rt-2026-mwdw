@@ -149,10 +149,21 @@
       </div>
 
       <div class="card">
+        <h2>Travel budget</h2>
+        <div class="row2">
+          <div><label>Per year ($)</label><input type="number" id="travYr" value="50000" step="5000"></div>
+          <div><label>Through your age</label><input type="number" id="travEnd" value="75"></div>
+        </div>
+        <label>Per year after that ($)</label><input type="number" id="travLate" value="15000" step="5000">
+        <div class="note">Travel is budgeted explicitly here and excluded from the percentage haircut below, so the full amount is funded every year from now until <span id="travLbl">75</span>.</div>
+      </div>
+
+      <div class="card">
         <h2>Other cost settings</h2>
-        <label>Retirement spending as % of current non-mortgage spending</label>
+        <label>Retirement spending as % of current spending</label>
         <input type="number" id="pctSpend" value="85" step="1">
-        <div class="note" style="margin-top:8px;padding-top:8px">Health costs are handled separately above, so remove medical premiums from the monthly budget below to avoid double counting.</div>
+        <div class="note" style="margin-top:8px;padding-top:8px">Applies to everyday categories only. Mortgage, healthcare, travel and child costs are each modelled on their own schedule, so none of them are double counted here.</div>
+        <label>Child costs end at your age</label><input type="number" id="childEnd" value="62">
         <label>Mortgage P&amp;I ends at your age (2040)</label><input type="number" id="mortEnd" value="70">
         <div class="row2">
           <div><label>Portfolio volatility %</label><input type="number" id="vol" value="10" step="1"></div>
@@ -237,9 +248,9 @@ const BUDGET=[
   {id:"b_groc",  label:"Groceries and household", def:1400},
   {id:"b_dine",  label:"Dining out and entertainment", def:800},
   {id:"b_tran",  label:"Transportation (cars, gas, insurance, transit)", def:455},
-  {id:"b_med",   label:"Health insurance and medical (while working)", def:80},
-  {id:"b_child",  label:"Child: activities, tutoring, current tuition", def:900},
-  {id:"b_trav",  label:"Travel", def:700},
+  {id:"b_med",   label:"Health insurance and medical (while working)", def:80, health:true},
+  {id:"b_child",  label:"Child: activities, tutoring, current tuition", def:900, child:true},
+  {id:"b_trav",  label:"Travel (superseded by the travel budget)", def:700, travel:true},
   {id:"b_shop",  label:"Shopping and personal", def:600},
   {id:"b_subs",  label:"Subscriptions and misc", def:250},
   {id:"b_give",  label:"Charitable giving and gifts", def:300}
@@ -253,12 +264,14 @@ const BUDGET=[
   });
 })();
 
-const IDS=["legacy","liDb","curAge","retAge","pAge","endAge","p0","save","events","rPre","rRet","infl","tax","ss","ssAge","pss","pssAge","pctSpend","hcPrivMo","hcMedYr","medAge","mortEnd","vol","runs"].concat(BUDGET.map(b=>b.id));
+const IDS=["legacy","liDb","curAge","retAge","pAge","endAge","p0","save","events","rPre","rRet","infl","tax","ss","ssAge","pss","pssAge","pctSpend","hcPrivMo","hcMedYr","medAge","mortEnd","vol","runs","travYr","travEnd","travLate","childEnd"].concat(BUDGET.map(b=>b.id));
 
 function P(){
   const infl=+$("infl").value/100;
   const mortMo=+$("b_mort").value;
-  let nonMort=0; BUDGET.forEach(b=>{ if(!b.mortgage) nonMort+=+$(b.id).value||0; });
+  /* everyday spending only: mortgage, health, travel and child are on their own schedules */
+  let everyday=0;
+  BUDGET.forEach(b=>{ if(!b.mortgage&&!b.health&&!b.travel&&!b.child) everyday+=+$(b.id).value||0; });
   return {
     curAge:+$("curAge").value, retAge:+$("retAge").value, endAge:+$("endAge").value,
     pAge:+$("pAge").value,
@@ -274,7 +287,10 @@ function P(){
     gap:+$("curAge").value - +$("pAge").value,  /* your age minus partner's */
     vol:Math.max(0,+$("vol").value/100), runs:Math.max(200,Math.min(6000,+$("runs").value)),
     mortEnd:+$("mortEnd").value, mortYr:mortMo*12,
-    base:nonMort*12*(+$("pctSpend").value/100),
+    base:everyday*12*(+$("pctSpend").value/100),
+    travYr:+$("travYr").value, travEnd:+$("travEnd").value, travLate:+$("travLate").value,
+    travBase:(+$("b_trav").value||0)*12,   /* travel already inside current spending */
+    childYr:(+$("b_child").value||0)*12, childEnd:+$("childEnd").value,
     legacy:+$("legacy").value,
     li:$("useLI").checked ? +$("liDb").value : 0
   };
@@ -286,14 +302,18 @@ function healthAt(p,a){
   const them = a>=(p.medAge+p.gap) ? p.medPP : p.privPP;
   return you+them;
 }
-const spendAt=(p,a,extra)=> p.base+(extra||0)+healthAt(p,a)+(a<p.mortEnd?p.mortYr:0);
+const travelAt=(p,a)=> a<=p.travEnd ? p.travYr : p.travLate;
+const childAt =(p,a)=> a<p.childEnd ? p.childYr : 0;
+const spendAt=(p,a,extra)=> p.base+(extra||0)+healthAt(p,a)+travelAt(p,a)+childAt(p,a)+(a<p.mortEnd?p.mortYr:0);
 const incomeAt=(p,a)=> (a>=p.ssAge?p.ss:0)+(a>=p.pssAtMyAge?p.pss:0);
 
+/* savings while working, less any travel spending above what the budget already assumes */
+const saveAt=(p,a)=> p.save - Math.max(0, travelAt(p,a)-p.travBase);
 function atRetirement(p){
   let b=p.p0, n=Math.max(1,Math.min(5,p.retAge-p.curAge)), per=p.events/n;
   for(let a=p.curAge;a<p.retAge;a++){
     if(a<p.curAge+n) b-=per;
-    b=b*(1+p.rPre)+p.save;
+    b=b*(1+p.rPre)+saveAt(p,a);
   }
   return b;
 }
@@ -335,7 +355,7 @@ function monteCarlo(p,extra,target){
       const r=mu+p.vol*gauss();
       if(a<p.retAge){
         if(a<p.curAge+nY) b-=per;
-        b=b*(1+r)+p.save;
+        b=b*(1+r)+saveAt(p,a);
       } else {
         const need=Math.max(0,spendAt(p,a,extra)-incomeAt(p,a));
         b=(b-need/(1-p.tax))*(1+r);
@@ -374,6 +394,7 @@ function calc(){
   document.querySelectorAll(".endA").forEach(e=>e.textContent=p.endAge);
   $("endLbl").textContent=p.endAge;
   $("pctLbl").textContent=$("pctLbl2").textContent=$("pctSpend").value;
+  $("travLbl").textContent=p.travEnd;
   $("mortLbl").textContent=p.mortEnd;
   let tot=0; BUDGET.forEach(b=>tot+=+$(b.id).value||0);
   $("budTot").textContent=fmt$(tot)+"/mo  ("+fmt$(tot*12)+"/yr)";
@@ -485,7 +506,7 @@ function drawChart(p,extra){
     const out=[]; let b=p.p0, n=Math.max(1,Math.min(5,p.retAge-p.curAge)), per=p.events/n;
     for(let a=p.curAge;a<=p.endAge;a++){
       out.push(Math.max(0,b));
-      if(a<p.retAge){ if(a<p.curAge+n) b-=per; b=b*(1+p.rPre)+p.save; }
+      if(a<p.retAge){ if(a<p.curAge+n) b-=per; b=b*(1+p.rPre)+saveAt(p,a); }
       else { b=(b-Math.max(0,spendAt(p,a,ex)-incomeAt(p,a))/(1-p.tax))*(1+p.rRet); }
       if(b<0)b=0;
     }
