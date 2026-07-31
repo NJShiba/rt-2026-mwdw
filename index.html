@@ -138,14 +138,26 @@
       </div>
 
       <div class="card">
-        <h2>Retirement cost settings</h2>
+        <h2>Healthcare bridge</h2>
+        <label>Private insurance, both of you ($/month)</label>
+        <input type="number" id="hcPrivMo" value="3000" step="100">
+        <label>Medicare + supplement + dental, both ($/yr)</label>
+        <input type="number" id="hcMedYr" value="14000" step="1000">
+        <label>Medicare eligibility age</label>
+        <input type="number" id="medAge" value="65">
+        <div class="note" id="hcNote"></div>
+      </div>
+
+      <div class="card">
+        <h2>Other cost settings</h2>
         <label>Retirement spending as % of current non-mortgage spending</label>
         <input type="number" id="pctSpend" value="85" step="1">
-        <div class="row2">
-          <div><label>Healthcare/yr before 65</label><input type="number" id="hcPre" value="18000" step="1000"></div>
-          <div><label>Healthcare/yr from 65</label><input type="number" id="hcPost" value="14000" step="1000"></div>
-        </div>
+        <div class="note" style="margin-top:8px;padding-top:8px">Health costs are handled separately above, so remove medical premiums from the monthly budget below to avoid double counting.</div>
         <label>Mortgage P&amp;I ends at your age (2040)</label><input type="number" id="mortEnd" value="70">
+        <div class="row2">
+          <div><label>Portfolio volatility %</label><input type="number" id="vol" value="10" step="1"></div>
+          <div><label>Simulation runs</label><input type="number" id="runs" value="1500" step="500"></div>
+        </div>
       </div>
     </div>
 
@@ -164,6 +176,18 @@
             <div class="small" id="heroHeadSub">&ndash;</div>
           </div>
         </div>
+      </div>
+
+      <div class="card">
+        <h2>Confidence in hitting the goal</h2>
+        <div style="display:flex;gap:22px;align-items:center;flex-wrap:wrap">
+          <canvas id="gauge" style="width:150px;height:150px;flex:none"></canvas>
+          <div style="flex:1;min-width:230px">
+            <div id="confHead" style="font-size:15px;font-weight:600;line-height:1.45"></div>
+            <div id="confBody" style="font-size:13px;color:var(--muted);line-height:1.6;margin-top:8px"></div>
+          </div>
+        </div>
+        <div class="note">Confidence comes from <span id="runsLbl">1500</span> simulated market histories: instead of one smooth return every year, each run draws a random yearly return around your expected average, so good and bad decades land in different orders. The percentage is the share of runs that finish at or above your legacy target without running dry first &mdash; this is what captures sequence-of-returns risk, the danger a straight-line projection hides.</div>
       </div>
 
       <div class="stat-grid">
@@ -213,7 +237,7 @@ const BUDGET=[
   {id:"b_groc",  label:"Groceries and household", def:1400},
   {id:"b_dine",  label:"Dining out and entertainment", def:800},
   {id:"b_tran",  label:"Transportation (cars, gas, insurance, transit)", def:455},
-  {id:"b_med",   label:"Health insurance and medical", def:80},
+  {id:"b_med",   label:"Health insurance and medical (while working)", def:80},
   {id:"b_child",  label:"Child: activities, tutoring, current tuition", def:900},
   {id:"b_trav",  label:"Travel", def:700},
   {id:"b_shop",  label:"Shopping and personal", def:600},
@@ -229,7 +253,7 @@ const BUDGET=[
   });
 })();
 
-const IDS=["legacy","liDb","curAge","retAge","pAge","endAge","p0","save","events","rPre","rRet","infl","tax","ss","ssAge","pss","pssAge","pctSpend","hcPre","hcPost","mortEnd"].concat(BUDGET.map(b=>b.id));
+const IDS=["legacy","liDb","curAge","retAge","pAge","endAge","p0","save","events","rPre","rRet","infl","tax","ss","ssAge","pss","pssAge","pctSpend","hcPrivMo","hcMedYr","medAge","mortEnd","vol","runs"].concat(BUDGET.map(b=>b.id));
 
 function P(){
   const infl=+$("infl").value/100;
@@ -244,14 +268,25 @@ function P(){
     tax:Math.min(.6,Math.max(0,+$("tax").value/100)),
     ss:+$("ss").value, ssAge:+$("ssAge").value,
     pss:+$("pss").value, pssAtMyAge:+$("pssAge").value + (+$("curAge").value - +$("pAge").value),
-    hcPre:+$("hcPre").value, hcPost:+$("hcPost").value,
+    privPP:+$("hcPrivMo").value*12/2,      /* private premium, per person */
+    medPP:+$("hcMedYr").value/2,           /* medicare cost, per person */
+    medAge:+$("medAge").value,
+    gap:+$("curAge").value - +$("pAge").value,  /* your age minus partner's */
+    vol:Math.max(0,+$("vol").value/100), runs:Math.max(200,Math.min(6000,+$("runs").value)),
     mortEnd:+$("mortEnd").value, mortYr:mortMo*12,
     base:nonMort*12*(+$("pctSpend").value/100),
     legacy:+$("legacy").value,
     li:$("useLI").checked ? +$("liDb").value : 0
   };
 }
-const spendAt=(p,a,extra)=> p.base+(extra||0)+(a<65?p.hcPre:p.hcPost)+(a<p.mortEnd?p.mortYr:0);
+/* healthcare: each of you costs the private premium until reaching Medicare age.
+   Partner reaches Medicare when your age = medAge + (your age - partner's age). */
+function healthAt(p,a){
+  const you  = a>=p.medAge ? p.medPP : p.privPP;
+  const them = a>=(p.medAge+p.gap) ? p.medPP : p.privPP;
+  return you+them;
+}
+const spendAt=(p,a,extra)=> p.base+(extra||0)+healthAt(p,a)+(a<p.mortEnd?p.mortYr:0);
 const incomeAt=(p,a)=> (a>=p.ssAge?p.ss:0)+(a>=p.pssAtMyAge?p.pss:0);
 
 function atRetirement(p){
@@ -278,6 +313,61 @@ function maxExtra(p,target){
   return lo;
 }
 function portfolioTarget(p,gross){ return Math.max(0, gross - p.li); }
+
+/* ---- Monte Carlo: random yearly returns around the expected average ---- */
+let nSpare=null;
+function gauss(){
+  if(nSpare!==null){const v=nSpare;nSpare=null;return v;}
+  let u=0,v=0;
+  while(u===0)u=Math.random();
+  while(v===0)v=Math.random();
+  const m=Math.sqrt(-2*Math.log(u)), a=2*Math.PI*v;
+  nSpare=m*Math.sin(a); return m*Math.cos(a);
+}
+function monteCarlo(p,extra,target){
+  const N=p.runs, ends=[];
+  let hit=0, ruin=0;
+  const nY=Math.max(1,Math.min(5,p.retAge-p.curAge)), per=p.events/nY;
+  for(let k=0;k<N;k++){
+    let b=p.p0, dead=false;
+    for(let a=p.curAge;a<p.endAge;a++){
+      const mu=a<p.retAge?p.rPre:p.rRet;
+      const r=mu+p.vol*gauss();
+      if(a<p.retAge){
+        if(a<p.curAge+nY) b-=per;
+        b=b*(1+r)+p.save;
+      } else {
+        const need=Math.max(0,spendAt(p,a,extra)-incomeAt(p,a));
+        b=(b-need/(1-p.tax))*(1+r);
+      }
+      if(b<=0){b=0;dead=true;break;}
+    }
+    ends.push(b);
+    if(dead) ruin++; else if(b>=target) hit++;
+  }
+  ends.sort((x,y)=>x-y);
+  const q=f=>ends[Math.min(ends.length-1,Math.floor(f*ends.length))];
+  return {conf:hit/N*100, ruin:ruin/N*100, p10:q(0.10), p50:q(0.50), p90:q(0.90)};
+}
+function drawGauge(pct){
+  const c=$("gauge"),ctx=c.getContext("2d"),dpr=window.devicePixelRatio||1,S=150;
+  c.width=S*dpr;c.height=S*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,S,S);
+  const cx=S/2,cy=S/2,r=58,lw=16;
+  ctx.lineWidth=lw;ctx.lineCap="round";
+  ctx.strokeStyle="#eceff3";
+  ctx.beginPath();ctx.arc(cx,cy,r,0,2*Math.PI);ctx.stroke();
+  const f=Math.max(0,Math.min(1,pct/100));
+  const col=pct>=90?"#1d9a5b":pct>=75?"#d97706":"#dc2626";
+  if(f>0.004){
+    ctx.strokeStyle=col;ctx.beginPath();
+    ctx.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+2*Math.PI*f);ctx.stroke();
+  }
+  ctx.fillStyle=col;ctx.textAlign="center";ctx.textBaseline="middle";
+  ctx.font="700 30px -apple-system,BlinkMacSystemFont,sans-serif";
+  ctx.fillText(Math.round(pct)+"%",cx,cy-8);
+  ctx.fillStyle="#68707f";ctx.font="11px sans-serif";
+  ctx.fillText("confidence",cx,cy+16);
+}
 
 function calc(){
   const p=P();
@@ -328,6 +418,25 @@ function calc(){
   });
   $("cmpTable").innerHTML=html;
   drawChart(p,extra);
+
+  /* ---- healthcare bridge note ---- */
+  const partnerMedAtMyAge=p.medAge+p.gap;
+  $("hcNote").innerHTML="At your retirement both of you are on private cover at "+fmt$(p.privPP*2)+"/yr. "+
+    "You reach Medicare at "+p.medAge+"; your partner not until you are <b>"+partnerMedAtMyAge+"</b>. "+
+    "So the plan carries "+fmt$(p.privPP*2)+"/yr for ages "+p.retAge+"&ndash;"+(p.medAge-1)+", then "+
+    fmt$(p.medPP+p.privPP)+"/yr for ages "+p.medAge+"&ndash;"+(partnerMedAtMyAge-1)+", then "+fmt$(p.medPP*2)+"/yr.";
+
+  /* ---- confidence ---- */
+  $("runsLbl").textContent=p.runs.toLocaleString();
+  const mc=monteCarlo(p,0,target);
+  drawGauge(mc.conf);
+  const verdict=mc.conf>=90?["good","Very strong."]:mc.conf>=75?["warn","Solid, with some risk."]:["bad","Fragile."];
+  $("confHead").innerHTML="<span class='"+verdict[0]+"'>"+verdict[1]+"</span> On your planned budget of "+fmt$(planned)+
+    "/yr, <b>"+Math.round(mc.conf)+"%</b> of simulated market histories finish at or above your "+fmtK(p.legacy)+" target.";
+  $("confBody").innerHTML=
+    "Chance of running out of money before "+p.endAge+": <b>"+(mc.ruin<0.5?"under 1":Math.round(mc.ruin))+"%</b>.<br>"+
+    "Range of outcomes at "+p.endAge+" &mdash; unlucky (10th percentile): <b>"+fmtM(mc.p10)+"</b> &middot; "+
+    "middle: <b>"+fmtM(mc.p50)+"</b> &middot; lucky (90th): <b>"+fmtM(mc.p90)+"</b>.";
 }
 
 function fitCanvas(c,hCss){
