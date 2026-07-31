@@ -74,14 +74,14 @@
 <body>
 <div class="wrap">
   <h1>Retirement &amp; Legacy Planner</h1>
-  <div class="sub">Built from your Retirement_Planner sheet (values as of 7/29/2026). All figures in today's dollars.</div>
+  <div class="sub">All figures in today's dollars.</div>
 
   <div class="layout">
     <!-- ================= INPUTS ================= -->
     <div>
       <div class="card">
-        <h2>Legacy for Gael</h2>
-        <label>Target to leave at your age <span id="endLbl">95</span> ($)</label>
+        <h2>Legacy for Child</h2>
+        <label>Target to leave the child at your age <span id="endLbl">95</span> ($)</label>
         <input type="number" id="legacy" value="500000" step="50000">
         <div class="leg-btns">
           <button data-l="0">$0</button>
@@ -96,7 +96,7 @@
         </div>
         <label>Life insurance death benefit ($)</label>
         <input type="number" id="liDb" value="416292" step="10000">
-        <div class="note">Gael already holds <b>$218,500</b> in his own accounts (529, Roth, UTMA) &mdash; those are his and sit outside this plan, so they are not counted toward the target.</div>
+        <div class="note">The child already holds <b>$218,500</b> in their own accounts (529, Roth, UTMA) &mdash; those sit outside this plan and are not counted toward the target.</div>
       </div>
 
       <div class="card">
@@ -121,7 +121,7 @@
         <label>Market scenarios</label>
         <div style="display:flex;gap:6px">
           <button class="scen" data-a="4.8" data-b="3.8" data-i="3">Pessimistic</button>
-          <button class="scen active" data-a="5.8" data-b="4.8" data-i="2.5">Sheet</button>
+          <button class="scen active" data-a="5.8" data-b="4.8" data-i="2.5">Baseline</button>
           <button class="scen" data-a="6.8" data-b="5.8" data-i="2">Optimistic</button>
         </div>
         <label>Effective tax rate in retirement %</label><input type="number" id="tax" value="18" step="1">
@@ -193,7 +193,7 @@
           <tbody></tbody>
           <tfoot><tr><td>Total</td><td style="text-align:right" id="budTot">&ndash;</td></tr></tfoot>
         </table>
-        <div class="note">Retirement spending = <span id="pctLbl">85</span>% of everything except the mortgage, plus the mortgage until age <span id="mortLbl">70</span>, plus retirement healthcare. Gael's activities line drops away after college, which is part of what the <span id="pctLbl2">85</span>% haircut represents.</div>
+        <div class="note">Retirement spending = <span id="pctLbl">85</span>% of everything except the mortgage, plus the mortgage until age <span id="mortLbl">70</span>, plus retirement healthcare. The child-related line drops away after college, which is part of what the <span id="pctLbl2">85</span>% haircut represents.</div>
       </div>
     </div>
   </div>
@@ -214,7 +214,7 @@ const BUDGET=[
   {id:"b_dine",  label:"Dining out and entertainment", def:800},
   {id:"b_tran",  label:"Transportation (cars, gas, insurance, transit)", def:455},
   {id:"b_med",   label:"Health insurance and medical", def:80},
-  {id:"b_gael",  label:"Gael: activities, tutoring, current tuition", def:900},
+  {id:"b_child",  label:"Child: activities, tutoring, current tuition", def:900},
   {id:"b_trav",  label:"Travel", def:700},
   {id:"b_shop",  label:"Shopping and personal", def:600},
   {id:"b_subs",  label:"Subscriptions and misc", def:250},
@@ -367,7 +367,7 @@ function drawLegChart(rows,p){
     ctx.fillText(fmtK(r.t),x+w/2,H-14);
   });
   ctx.fillStyle="#8a93a3"; ctx.font="10px sans-serif"; ctx.textAlign="center";
-  ctx.fillText("legacy left to Gael at age "+p.endAge,W/2,H-2);
+  ctx.fillText("legacy left to child at age "+p.endAge,W/2,H-2);
 }
 function drawChart(p,extra){
   const {ctx,W,H,narrow}=fitCanvas($("chart"));
@@ -453,7 +453,7 @@ function load(){
   document.querySelectorAll(".leg-btns button").forEach(x=>x.classList.toggle("active",+x.dataset.l===+$("legacy").value));
 }
 $("resetBtn").addEventListener("click",()=>{
-  if(confirm("Reset everything to the values from your Retirement_Planner sheet?")){
+  if(confirm("Reset everything to the default values?")){
     localStorage.removeItem(STORE); location.reload();
   }
 });
